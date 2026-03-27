@@ -30,25 +30,6 @@ type YouTubeResolved = {
   formats: YouTubeFormat[];
 };
 
-type YouTubePlayerResponse = {
-  playabilityStatus?: {
-    status?: string;
-    reason?: string;
-  };
-  streamingData?: {
-    formats?: YouTubeFormat[];
-    adaptiveFormats?: YouTubeFormat[];
-  };
-  videoDetails?: {
-    title?: string;
-    thumbnail?: {
-      thumbnails?: Array<{
-        url?: string;
-      }>;
-    };
-  };
-};
-
 async function headWithTimeout(url: string, timeoutMs = 9000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -124,9 +105,9 @@ async function resolveYouTube(videoId: string): Promise<YouTubeResolved> {
     throw new AppError('ANALYZE_FAILED', 'Could not read YouTube video metadata.', 422);
   }
 
-  let playerResponse: YouTubePlayerResponse;
+  let playerResponse: any;
   try {
-    playerResponse = JSON.parse(playerRaw) as YouTubePlayerResponse;
+    playerResponse = JSON.parse(playerRaw);
   } catch {
     throw new AppError('ANALYZE_FAILED', 'Could not parse YouTube response.', 422);
   }
