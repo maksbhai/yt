@@ -15,14 +15,14 @@ export function UrlInputPanel({ value, disabled, analyzing, onChange, onAnalyze,
   return (
     <section className="glass-panel mb-6 rounded-2xl p-4 sm:p-5">
       <label htmlFor="url" className="mb-2 block text-xs uppercase tracking-wide text-slate-300">
-        Direct media URL
+        Media or YouTube URL
       </label>
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
           id="url"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="https://example.com/media/video.mp4"
+          placeholder="https://youtube.com/watch?v=... or https://example.com/media/video.mp4"
           className="h-12 flex-1 rounded-xl border border-white/15 bg-slate-900/40 px-4 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-indigo-300 transition focus:border-indigo-300/40 focus:ring"
           autoComplete="off"
           spellCheck={false}

@@ -188,7 +188,7 @@ export default function HomePage() {
       {!media && uiStatus === 'idle' ? (
         <div className="glass-panel mt-4 rounded-2xl p-6 text-center text-slate-300">
           <SearchX className="mx-auto mb-2 h-6 w-6 text-blue-200" />
-          Paste a direct media URL, click Analyze, then choose video or audio download.
+          Paste a YouTube or direct media URL, click Analyze, then choose video or audio download.
         </div>
       ) : null}
 

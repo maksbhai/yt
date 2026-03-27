@@ -19,8 +19,8 @@ export function HeroSection() {
         Media Hub Lite
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
-        Fast MVP for user-owned or user-permitted direct media URLs. Analyze instantly, pick video or audio, and
-        download with smooth real-time feedback.
+        Fast MVP for user-owned or user-permitted media links, including YouTube links and direct media URLs. Analyze
+        instantly, pick video or audio, and download with smooth real-time feedback.
       </p>
     </motion.section>
   );
