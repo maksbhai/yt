@@ -6,6 +6,48 @@ const DIRECT_MEDIA_EXTS = ['.mp4', '.webm', '.mov', '.m4v', '.mp3', '.wav', '.m4
 const AUDIO_EXTS = ['.mp3', '.wav', '.m4a', '.ogg'];
 const SUPPORTED_AUDIO_MIME = /audio\//i;
 const SUPPORTED_VIDEO_MIME = /video\//i;
+const YOUTUBE_HOSTS = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'youtu.be',
+  'www.youtu.be'
+]);
+
+type YouTubeFormat = {
+  itag: number;
+  url?: string;
+  mimeType?: string;
+  qualityLabel?: string;
+  contentLength?: string;
+  bitrate?: number;
+  audioQuality?: string;
+};
+
+type YouTubeResolved = {
+  title: string;
+  thumbnail?: string;
+  formats: YouTubeFormat[];
+};
+
+type YouTubePlayerResponse = {
+  playabilityStatus?: {
+    status?: string;
+    reason?: string;
+  };
+  streamingData?: {
+    formats?: YouTubeFormat[];
+    adaptiveFormats?: YouTubeFormat[];
+  };
+  videoDetails?: {
+    title?: string;
+    thumbnail?: {
+      thumbnails?: Array<{
+        url?: string;
+      }>;
+    };
+  };
+};
 
 async function headWithTimeout(url: string, timeoutMs = 9000): Promise<Response> {
   const controller = new AbortController();
@@ -43,8 +85,115 @@ function inferMime(ext: string): string | undefined {
   return undefined;
 }
 
+function parseYouTubeId(parsed: URL): string | null {
+  if (!YOUTUBE_HOSTS.has(parsed.hostname.toLowerCase())) return null;
+
+  if (parsed.hostname.includes('youtu.be')) {
+    const id = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+    return id || null;
+  }
+
+  if (parsed.pathname === '/watch') {
+    return parsed.searchParams.get('v');
+  }
+
+  if (parsed.pathname.startsWith('/shorts/')) {
+    return parsed.pathname.split('/')[2] || null;
+  }
+
+  if (parsed.pathname.startsWith('/embed/')) {
+    return parsed.pathname.split('/')[2] || null;
+  }
+
+  return null;
+}
+
+async function resolveYouTube(videoId: string): Promise<YouTubeResolved> {
+  const infoUrl = `https://www.youtube.com/get_video_info?video_id=${encodeURIComponent(videoId)}&el=detailpage&hl=en`;
+  const res = await fetch(infoUrl, { redirect: 'follow' });
+
+  if (!res.ok) {
+    throw new AppError('ANALYZE_FAILED', `YouTube request failed with HTTP ${res.status}.`, 422);
+  }
+
+  const body = await res.text();
+  const params = new URLSearchParams(body);
+  const playerRaw = params.get('player_response');
+
+  if (!playerRaw) {
+    throw new AppError('ANALYZE_FAILED', 'Could not read YouTube video metadata.', 422);
+  }
+
+  let playerResponse: YouTubePlayerResponse;
+  try {
+    playerResponse = JSON.parse(playerRaw) as YouTubePlayerResponse;
+  } catch {
+    throw new AppError('ANALYZE_FAILED', 'Could not parse YouTube response.', 422);
+  }
+
+  const status = playerResponse?.playabilityStatus?.status;
+  if (status && status !== 'OK') {
+    const reason = playerResponse?.playabilityStatus?.reason ?? 'Video is not playable.';
+    throw new AppError('UNSUPPORTED_SOURCE', reason, 400);
+  }
+
+  const streamingFormats: YouTubeFormat[] = [
+    ...(playerResponse?.streamingData?.formats ?? []),
+    ...(playerResponse?.streamingData?.adaptiveFormats ?? [])
+  ];
+
+  const formats = streamingFormats.filter((fmt) => Boolean(fmt?.url));
+  if (!formats.length) {
+    throw new AppError(
+      'UNSUPPORTED_SOURCE',
+      'No direct YouTube stream URLs are available for this video right now.',
+      400
+    );
+  }
+
+  return {
+    title: playerResponse?.videoDetails?.title ?? `youtube-${videoId}`,
+    thumbnail: playerResponse?.videoDetails?.thumbnail?.thumbnails?.at(-1)?.url,
+    formats
+  };
+}
+
+function pickYoutubeFormat(formats: YouTubeFormat[], format: MediaFormat): YouTubeFormat | null {
+  if (format === 'video') {
+    const videoFormats = formats.filter((f) => f.mimeType?.includes('video/'));
+    if (!videoFormats.length) return null;
+    return videoFormats.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0] ?? null;
+  }
+
+  const audioFormats = formats.filter((f) => f.mimeType?.includes('audio/'));
+  if (!audioFormats.length) return null;
+  return audioFormats.sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0] ?? null;
+}
+
 export async function analyzeMedia(url: string): Promise<MediaInfo> {
   const parsed = parseHttpUrl(url);
+  const youtubeId = parseYouTubeId(parsed);
+
+  if (youtubeId) {
+    const yt = await resolveYouTube(youtubeId);
+    const hasVideo = yt.formats.some((f) => f.mimeType?.includes('video/'));
+    const hasAudio = yt.formats.some((f) => f.mimeType?.includes('audio/'));
+    const preferred = pickYoutubeFormat(yt.formats, hasVideo ? 'video' : 'audio');
+    const mimeType = preferred?.mimeType?.split(';')[0];
+    const ext = guessExtFromMime(mimeType) || (hasVideo ? '.mp4' : '.mp3');
+    const base = sanitizeFileName(yt.title, `youtube-${youtubeId}`);
+
+    return {
+      sourceUrl: parsed.toString(),
+      title: yt.title,
+      fileName: `${base}${ext}`,
+      mimeType,
+      previewUrl: undefined,
+      canDownloadVideo: hasVideo,
+      canDownloadAudio: hasAudio
+    };
+  }
+
   const ext = extFromPath(parsed.pathname);
   let response: Response | undefined;
 
@@ -91,6 +240,31 @@ export async function analyzeMedia(url: string): Promise<MediaInfo> {
 }
 
 export async function createDownload(url: string, format: MediaFormat) {
+  const parsed = parseHttpUrl(url);
+  const youtubeId = parseYouTubeId(parsed);
+
+  if (youtubeId) {
+    const yt = await resolveYouTube(youtubeId);
+    const selected = pickYoutubeFormat(yt.formats, format);
+
+    if (!selected?.url) {
+      throw new AppError('DOWNLOAD_FAILED', `${format === 'video' ? 'Video' : 'Audio'} format is unavailable.`, 400);
+    }
+
+    const mimeType = selected.mimeType?.split(';')[0];
+    const ext = guessExtFromMime(mimeType) || (format === 'video' ? '.mp4' : '.mp3');
+    const base = sanitizeFileName(yt.title, `youtube-${youtubeId}`);
+    const sizeBytes = selected.contentLength ? Number(selected.contentLength) : undefined;
+
+    return {
+      downloadUrl: selected.url,
+      fileName: `${base}${ext}`,
+      format,
+      mimeType,
+      sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined
+    };
+  }
+
   const analyzed = await analyzeMedia(url);
 
   if (format === 'video' && !analyzed.canDownloadVideo) {
