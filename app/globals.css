@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply min-h-screen bg-bg text-slate-100 antialiased;
+  background-image:
+    radial-gradient(circle at 10% 10%, rgba(59, 130, 246, 0.2), transparent 25%),
+    radial-gradient(circle at 90% 15%, rgba(99, 102, 241, 0.2), transparent 20%),
+    linear-gradient(180deg, #040711, #070b1b 45%, #03050d);
+}
+
+.glass-panel {
+  @apply border border-white/10 bg-white/5 backdrop-blur-xl;
+}
+
+.shimmer {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.08) 25%, rgba(148, 163, 184, 0.25) 50%, rgba(148, 163, 184, 0.08) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
