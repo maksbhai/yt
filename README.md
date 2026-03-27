@@ -1,6 +1,6 @@
 # Media Hub Lite
 
-A polished MVP downloader built with Next.js App Router for **lawful media downloads only** from direct media file URLs and user-permitted sources.
+A polished MVP downloader built with Next.js App Router for **lawful media downloads only** from YouTube links, direct media file URLs, and user-permitted sources.
 
 > This project does not implement bypassing platform protections or unauthorized copyrighted content retrieval.
 
@@ -49,7 +49,7 @@ No extra infrastructure is required for the MVP.
 ## API Overview
 
 ### `POST /api/analyze`
-Analyze a direct media URL.
+Analyze a YouTube or direct media URL.
 
 **Request**
 
@@ -102,7 +102,9 @@ Create a fast download payload for selected format.
 
 ## Supported Source Explanation
 
-This MVP supports **direct media file URLs** (HTTP/HTTPS), such as URLs ending in common media extensions (`.mp4`, `.webm`, `.mp3`, `.m4a`, etc.) or URLs returning media content-type headers.
+This MVP supports:
+- **YouTube links** (`youtube.com`, `youtu.be`) when direct stream URLs are available.
+- **Direct media file URLs** (HTTP/HTTPS), such as URLs ending in common media extensions (`.mp4`, `.webm`, `.mp3`, `.m4a`, etc.) or URLs returning media content-type headers.
 
 If a source cannot be validated as direct/supportable media, the API returns a clear `UNSUPPORTED_SOURCE` error.
 
